@@ -143,6 +143,45 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /api/auth:
+    get:
+      operationId: getCurrentUser
+      summary: 当前用户（含其拥有的实例）
+      description: |
+        普通用户**唯一**能列实例的入口：管理员的 `/api/service/remote_services` 需要
+        `ROLE.ADMIN`，普通账号的 API Key 会被 403。
+
+        - `advanced=true` 时每个实例带 `daemonId` / `status` / `nickname` / `docker` / `info`；
+        - 该路由**不套** `{status,data,time}` 外壳，直接返回用户对象；
+        - 面板要求 `X-Requested-With: XMLHttpRequest`（`isAjax` 校验），本包中间件已带上；
+        - API Key 也能用：面板从 key 反查用户（`getUserUuid`）。
+      parameters:
+        - name: advanced
+          in: query
+          required: false
+          description: true = 带上实例的完整信息（含状态、Docker 配置、玩家数）
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: 当前用户
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentUserResponse"
+        "403":
+          description: API Key 权限不足 / 未开启 API Key 功能
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: 面板内部错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   securitySchemes:
     apiKeyHeader:
@@ -253,6 +292,74 @@ components:
         time:
           type: integer
           format: int64
+
+    CurrentUserResponse:
+      type: object
+      description: |
+        `GET /api/auth` 的响应。**没有** `status/data/time` 外壳（面板直接返回用户对象）。
+      properties:
+        uuid:
+          type: string
+        userName:
+          type: string
+        permission:
+          type: integer
+          description: 0 guest / 1 user / 10 admin（`ROLE`）
+        isInit:
+          type: boolean
+        open2FA:
+          type: boolean
+        loginTime:
+          type: integer
+          format: int64
+        registerTime:
+          type: integer
+          format: int64
+        instances:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdvancedInstanceInfo"
+
+    AdvancedInstanceInfo:
+      type: object
+      description: |
+        `GET /api/auth?advanced=true` 里的一条实例（普通用户视角）：
+        已经带 `status` / `nickname` / `docker` / `info`，不需要再逐个查详情。
+      required:
+        - instanceUuid
+        - daemonId
+      properties:
+        instanceUuid:
+          type: string
+        daemonId:
+          type: string
+        nickname:
+          type: string
+        status:
+          type: integer
+          description: "-1 busy / 0 stopped / 1 stopping / 2 starting / 3 running"
+        hostIp:
+          type: string
+        remarks:
+          type: string
+        processType:
+          type: string
+        stopCommand:
+          type: string
+        ie:
+          type: string
+        oe:
+          type: string
+        endTime:
+          type: integer
+          format: int64
+        lastDatetime:
+          type: integer
+          format: int64
+        docker:
+          $ref: "#/components/schemas/DockerConfig"
+        info:
+          $ref: "#/components/schemas/InstanceInfo"
 
     InstanceDetail:
       type: object

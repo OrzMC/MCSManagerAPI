@@ -121,6 +121,42 @@ final class SpecDecodingTests {
         #expect(detail.config?.enableRcon == true)
     }
 
+    /// `GET /api/auth?advanced=true`：**没有** `{status,data,time}` 外壳，实例带 daemonId/status。
+    @Test
+    func decodesCurrentUserWithAdvancedInstances() throws {
+        let user = try decode(
+            Components.Schemas.CurrentUserResponse.self,
+            """
+            {
+              "uuid": "u1",
+              "userName": "joker",
+              "permission": 1,
+              "isInit": true,
+              "open2FA": false,
+              "instances": [
+                {
+                  "instanceUuid": "50c73059001b436fa85c0d8221c157cf",
+                  "daemonId": "d1",
+                  "nickname": "我的生存服",
+                  "status": 3,
+                  "hostIp": "10.0.0.2:24444",
+                  "remarks": "CN-ZJ",
+                  "processType": "general",
+                  "docker": {},
+                  "info": { "currentPlayers": 3, "maxPlayers": 20 }
+                }
+              ]
+            }
+            """
+        )
+
+        #expect(user.permission == 1)
+        #expect(user.instances?.count == 1)
+        #expect(user.instances?.first?.daemonId == "d1")
+        #expect(user.instances?.first?.status == 3)
+        #expect(user.instances?.first?.info?.currentPlayers == 3)
+    }
+
     /// 面板权限不足时返回 403 + 字符串 data：能解成 `ErrorResponse`，不是崩在解码上。
     @Test
     func decodesForbiddenError() throws {

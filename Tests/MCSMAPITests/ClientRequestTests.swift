@@ -75,6 +75,32 @@ final class ClientRequestTests {
         #expect(query.first(where: { $0.name == "daemonId" })?.value == "daemon-1")
     }
 
+    /// 普通用户列实例走 `/api/auth?advanced=true`（管理员端点要 ROLE.ADMIN，普通 key 会 403）。
+    @Test
+    func currentUserRequestsAdvancedInstances() async throws {
+        let capture = RequestCapture()
+        let transport = MockTransport { request, _, url, operationID in
+            await capture.record(request, baseURL: url, operationID: operationID)
+            let payload: [String: Any] = ["uuid": "u1", "permission": 1, "instances": []]
+            return (makeJSONResponse(), try makeJSONBody(payload))
+        }
+        let client = MCSMClient.make(
+            serverURL: URL(string: "https://panel.example.com")!,
+            apiKey: "test-api-key",
+            transport: transport
+        )
+
+        let output = try await client.getCurrentUser(query: .init(advanced: true))
+        let user = try output.ok.body.json
+        #expect(user.uuid == "u1")
+        #expect(user.permission == 1)
+
+        let request = try #require(await capture.request)
+        let path = try #require(request.path)
+        #expect(path.hasPrefix("/api/auth?"))
+        #expect(queryItems(of: request).first(where: { $0.name == "advanced" })?.value == "true")
+    }
+
     @Test
     func daemonListUsesServiceRoute() async throws {
         let capture = RequestCapture()

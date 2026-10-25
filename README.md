@@ -15,11 +15,14 @@ import MCSMAPI
 // 面板地址 + 「用户信息 → API Key」里生成的 key
 let client = MCSMClient.make(serverURL: URL(string: "https://panel.example.com")!, apiKey: key)
 
-// 1. 节点列表（管理员）
+// 普通用户（permission = 1）：列自己拥有的实例（**唯一**能用的入口）
+let user = try await client.getCurrentUser(query: .init(advanced: true))
+let myInstances = try user.ok.body.json.instances ?? []   // 每项自带 daemonId / status / docker / info
+
+// 管理员（permission = 10）：按节点列全部实例
 let daemons = try await client.getDaemons()
-// 2. 某个节点上的实例（含 status / config）
 let page = try await client.getInstances(query: .init(daemonId: daemon.uuid, page: 1, page_size: 50))
-// 3. 单个实例详情（含 processInfo / config.docker.memory）
+// 单个实例详情（含 processInfo / config.docker.memory）
 let detail = try await client.getInstance(query: .init(uuid: instanceUUID, daemonId: daemon.uuid))
 ```
 
@@ -44,6 +47,16 @@ let detail = try await client.getInstance(query: .init(uuid: instanceUUID, daemo
 归一化到 OrzMC 的 `RemoteServerState` 由调用方做（见 `Sources/OrzMCRemoteHosting` 的
 `RemoteHostingProvider`）。
 
+### 权限：管理员 vs 普通用户（重要）
+
+| 账号 | 列实例的入口 | 说明 |
+|---|---|---|
+| 管理员（`permission = 10`） | `GET /api/service/remote_services` → `GET /api/service/remote_service_instances` | 面板所有节点的所有实例 |
+| 普通用户（`permission = 1`） | `GET /api/auth?advanced=true` | **只能**列自己拥有的实例；管理员端点对普通 key 一律 403（面板文案可能误导成「密钥不正确」） |
+
+`GET /api/auth` 的响应**没有** `{status,data,time}` 外壳，且 API Key 也能用
+（面板从 key 反查用户）；`advanced=true` 时每条实例已带 `daemonId` / `status` / `docker` / `info`。
+
 ## openapi.yml 的来源
 
 官方**没有**提供机器可读的 OpenAPI/Swagger 文件，只有 markdown apidoc
@@ -52,7 +65,7 @@ let detail = try await client.getInstance(query: .init(uuid: instanceUUID, daemo
 
 | 项 | 值 |
 |---|---|
-| 依据的文档 | `MCSManager/Documentation` @ `287c3936` |
+| 依据的文档 | `MCSManager/Documentation` @ `287c3936`；`GET /api/auth` 另据面板源码 `panel/src/app/routers/general_user_router.ts` |
 | 面板实现参考（鉴权判定） | `MCSManager/MCSManager` @ `ad4f903a`（`panel/src/app/middleware/permission.ts`） |
 
 口径：

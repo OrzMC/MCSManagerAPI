@@ -336,8 +336,19 @@ components:
     CurrentUserResponse:
       type: object
       description: |
-        `GET /api/auth` 的响应。**没有** `status/data/time` 外壳（面板直接返回用户对象）。
+        `GET /api/auth` 的响应。**两种形状都要能解**：
+
+        - 老/部分版本：直接返回用户对象 `{uuid, userName, permission, instances, …}`；
+        - 新版协议中间件：统一包一层 `{status, data: {…用户对象…}, time}`。
+
+        实测（2026-10-26，面板 10.x）：管理员与普通用户的 key 拿到的都是**带外壳**那种；
+        只按"裸用户对象"解会得到 `permission = nil / instances = 空`，
+        于是普通用户永远看不到实例。所以这里同时声明两套字段，由调用方把 `data` 优先取出来。
       properties:
+        status:
+          type: integer
+        data:
+          $ref: "#/components/schemas/CurrentUserPayload"
         uuid:
           type: string
         userName:
@@ -345,6 +356,31 @@ components:
         permission:
           type: integer
           description: 0 guest / 1 user / 10 admin（`ROLE`）
+        isInit:
+          type: boolean
+        open2FA:
+          type: boolean
+        loginTime:
+          type: integer
+          format: int64
+        registerTime:
+          type: integer
+          format: int64
+        instances:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdvancedInstanceInfo"
+
+    CurrentUserPayload:
+      type: object
+      description: "GET /api/auth 的外壳里的用户对象（字段同 CurrentUserResponse 的裸形态）。"
+      properties:
+        uuid:
+          type: string
+        userName:
+          type: string
+        permission:
+          type: integer
         isInit:
           type: boolean
         open2FA:

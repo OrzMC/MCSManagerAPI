@@ -157,6 +157,32 @@ final class SpecDecodingTests {
         #expect(user.instances?.first?.info?.currentPlayers == 3)
     }
 
+    /// 同一个 `/api/auth` 在**带外壳**的版本上也要能解（实测面板 10.x 就是这种）。
+    @Test
+    func decodesCurrentUserInsideEnvelope() throws {
+        let response = try decode(
+            Components.Schemas.CurrentUserResponse.self,
+            """
+            {
+              "status": 200,
+              "time": 1718594177859,
+              "data": {
+                "uuid": "u1",
+                "userName": "testuser",
+                "permission": 1,
+                "instances": [
+                  { "instanceUuid": "i1", "daemonId": "d1", "nickname": "我的服", "status": 3 }
+                ]
+              }
+            }
+            """
+        )
+
+        #expect(response.status == 200)
+        #expect(response.data?.permission == 1)
+        #expect(response.data?.instances?.first?.instanceUuid == "i1")
+    }
+
     /// 面板权限不足时返回 403 + 字符串 data：能解成 `ErrorResponse`，不是崩在解码上。
     @Test
     func decodesForbiddenError() throws {

@@ -42,3 +42,13 @@ func makeJSONResponse(status: HTTPResponse.Status = .ok) -> HTTPResponse {
     response.headerFields[.contentType] = "application/json; charset=utf-8"
     return response
 }
+
+func makeTextResponse(status: HTTPResponse.Status = .ok) -> HTTPResponse {
+    var response = HTTPResponse(status: status)
+    response.headerFields[.contentType] = "text/plain; charset=utf-8"
+    return response
+}
+
+func makeTextBody(_ text: String) -> HTTPBody {
+    HTTPBody(text)
+}

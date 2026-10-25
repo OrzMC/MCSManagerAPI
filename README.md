@@ -26,6 +26,37 @@ let page = try await client.getInstances(query: .init(daemonId: daemon.uuid, pag
 let detail = try await client.getInstance(query: .init(uuid: instanceUUID, daemonId: daemon.uuid))
 ```
 
+### 动作与控制台
+
+```swift
+// 生命周期动作：三个都是 GET + `daemonId` / `uuid`（uuid 是**实例 UUID**，不是昵称）
+try await client.openInstance(query: .init(daemonId: daemonId, uuid: instanceUUID))
+try await client.stopInstance(query: .init(daemonId: daemonId, uuid: instanceUUID))
+try await client.restartInstance(query: .init(daemonId: daemonId, uuid: instanceUUID))
+
+// 控制台命令：走**查询参数**（不是请求体），编码由客户端负责
+try await client.sendCommand(
+    query: .init(daemonId: daemonId, uuid: instanceUUID, command: "/say hi")
+)
+
+// 控制台输出：**纯文本**（日志尾部），不是 JSON
+let log = try await client.getOutputLog(
+    query: .init(daemonId: daemonId, uuid: instanceUUID, size: "16kb")
+)
+let text = try await String(collecting: log.ok.body.plainText, upTo: 1 << 20)
+```
+
+| 端点 | 权限 | 说明 |
+|---|---|---|
+| `GET /api/protected_instance/open` | 实例的主人（**普通用户也行**） | 启动。面板立即返回，状态随后变化 |
+| `GET /api/protected_instance/stop` | 同上 | 停止（发送 `stop`，不强制杀进程） |
+| `GET /api/protected_instance/restart` | 同上 | 重启 |
+| `GET /api/protected_instance/command` | 同上 | 命令走查询参数；`/` 开头是 MC 命令，不带 `/` 是控制台命令 |
+| `GET /api/protected_instance/outputlog` | 同上 | 返回 `text/plain` 的**日志尾部**，可能从半行开始 |
+
+⚠️ `/protected_instance/*` 的中间件先校验"这台实例是不是你的"（`daemonId` + `uuid` 缺一个就 403
+「参数不正确或非法访问实例」），**再**看 API Key 的权限等级 —— 所以普通用户的 key 完全够用。
+
 `MCSMClient.make` 会注入 `X-Request-API-Key`（以及官方要求的
 `X-Requested-With: XMLHttpRequest` / `Accept: application/json`），并去掉面板地址的尾部斜杠。
 

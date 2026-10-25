@@ -22,6 +22,10 @@ final class ClientRequestTests {
         let transport = MockTransport { request, _, url, operationID in
             await capture.record(request, baseURL: url, operationID: operationID)
             // 每个端点回一份形状正确的最小响应（只为让解码通过，测试关心的是请求本身）。
+            // 控制台端点回的是纯文本，其它端点回 JSON。
+            if operationID == "getOutputLog" {
+                return (makeTextResponse(), makeTextBody("[12:00:00] [Server thread/INFO]: Done"))
+            }
             let payload: Any =
                 switch operationID {
                 case "getDaemons": ["status": 200, "data": []]
@@ -35,6 +39,72 @@ final class ClientRequestTests {
             apiKey: "test-api-key",
             transport: transport
         )
+    }
+
+    /// 三个生命周期动作都打到 `/api/protected_instance/<动作>`，并且**同时带 daemonId 与 uuid**
+    /// （面板中间件按这两个参数判断"这台实例是不是你的"，少一个就 403）。
+    @Test
+    func lifecycleActionsCarryDaemonAndInstance() async throws {
+        for (action, path) in [
+            ("openInstance", "/api/protected_instance/open"),
+            ("stopInstance", "/api/protected_instance/stop"),
+            ("restartInstance", "/api/protected_instance/restart"),
+        ] {
+            let capture = RequestCapture()
+            let client = makeClient(capture: capture)
+            switch action {
+            case "openInstance":
+                _ = try await client.openInstance(query: .init(daemonId: "d1", uuid: "i1"))
+            case "stopInstance":
+                _ = try await client.stopInstance(query: .init(daemonId: "d1", uuid: "i1"))
+            default:
+                _ = try await client.restartInstance(query: .init(daemonId: "d1", uuid: "i1"))
+            }
+
+            let request = try #require(await capture.request)
+            let requestPath = try #require(request.path)
+            #expect(requestPath.hasPrefix(path + "?"), "实际路径：\(requestPath)")
+            let query = queryItems(of: request)
+            #expect(query.first(where: { $0.name == "daemonId" })?.value == "d1")
+            #expect(query.first(where: { $0.name == "uuid" })?.value == "i1")
+        }
+    }
+
+    /// 控制台命令走**查询参数**（面板的 validator 就这么写的），命令里的空格/斜杠要编码好。
+    @Test
+    func commandSendsPercentEncodedQuery() async throws {
+        let capture = RequestCapture()
+        let client = makeClient(capture: capture)
+
+        _ = try await client.sendCommand(
+            query: .init(daemonId: "d1", uuid: "i1", command: "/say hi & bye")
+        )
+
+        let request = try #require(await capture.request)
+        let path = try #require(request.path)
+        #expect(path.hasPrefix("/api/protected_instance/command?"))
+        let query = queryItems(of: request)
+        // 解码后的值应该和原命令一模一样（编码由客户端负责）。
+        #expect(query.first(where: { $0.name == "command" })?.value == "/say hi & bye")
+        // 编码后的形式里不能有裸空格（否则面板会当成参数结束）。
+        #expect(!path.contains("/say hi"))
+    }
+
+    /// 控制台输出是 `text/plain` 的**原样文本**，不是 JSON 包一层。
+    @Test
+    func outputLogReturnsPlainText() async throws {
+        let capture = RequestCapture()
+        let client = makeClient(capture: capture)
+
+        let output = try await client.getOutputLog(
+            query: .init(daemonId: "d1", uuid: "i1", size: "16kb")
+        )
+        let text = try output.ok.body.plainText
+
+        #expect(try await String(collecting: text, upTo: 4096).contains("Done"))
+        let request = try #require(await capture.request)
+        let query = queryItems(of: request)
+        #expect(query.first(where: { $0.name == "size" })?.value == "16kb")
     }
 
     @Test

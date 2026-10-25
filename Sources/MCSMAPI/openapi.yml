@@ -14,7 +14,8 @@ info:
     设计口径（与 `swift/lib/ExarotonAPI` 一致）：
     - **保守声明**：只有我们真的依赖的字段才写进 `required`，其余全部可选。
       面板版本之间字段会增删，解码要宽容（未知字段会被 Swift 忽略）；
-    - 只覆盖已接入的端点，不做"把官方文档全抄一遍"。加端点时同步更新本文件与 README。
+    - 只覆盖已接入的端点，不做"把官方文档全抄一遍"。加端点时同步更新本文件与 README；
+    - **动作 + 控制台**（`/api/protected_instance/*`）只要"这台实例属于你"，普通用户的 key 也能用。
 
     ⚠️ 该面板要求打开「API Key」功能（`enableApiKey`），否则所有带 key 的请求都会被拒。
 servers:
@@ -218,6 +219,244 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
             # 面板实际返回 `Content-Type: text/plain` + JSON 文本（协议中间件 JSON.stringify 后
             # 没改 Content-Type），所以两种类型都要声明，否则客户端会判定"类型不匹配"而丢掉文案。
+            text/plain:
+              schema:
+                type: string
+
+  /api/protected_instance/open:
+    get:
+      operationId: openInstance
+      summary: 启动实例
+      description: |
+        对应面板「启动」。面板把请求转给节点后立即返回；实例真正起来要再查一次状态。
+
+        **普通用户也能调用**（`/protected_instance` 一组只要"这台实例属于你"，不要求管理员）。
+        面板对成功/失败都返回 200 + 空的 JSON 对象或节点回执，所以本 spec 不声明 200 的响应体：
+        我们只关心"请求有没有被拒绝"（403/500）。
+      parameters:
+        - name: daemonId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: uuid
+          in: query
+          required: true
+          description: 实例 UUID（**不是**昵称）
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 已受理（面板立即返回，实例状态随后变化，需重新查询状态）
+        "403":
+          description: API Key 权限不足 / 未开启 API Key 功能 / 不是这台实例的主人
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+            # 面板实际返回 `Content-Type: text/plain` + JSON 文本（协议中间件 JSON.stringify 后
+            # 没改 Content-Type），所以两种类型都要声明，否则客户端会判定"类型不匹配"而丢掉文案。
+            text/plain:
+              schema:
+                type: string
+        "500":
+          description: 面板内部错误 / 节点（守护进程）返回了错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+            text/plain:
+              schema:
+                type: string
+  /api/protected_instance/stop:
+    get:
+      operationId: stopInstance
+      summary: 停止实例
+      description: |
+        对应面板「停止」（会给实例发 `stop`，等它自己退出）。要强制杀进程用 `kill`（本包未封装）。
+
+        **普通用户也能调用**（`/protected_instance` 一组只要"这台实例属于你"，不要求管理员）。
+        面板对成功/失败都返回 200 + 空的 JSON 对象或节点回执，所以本 spec 不声明 200 的响应体：
+        我们只关心"请求有没有被拒绝"（403/500）。
+      parameters:
+        - name: daemonId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: uuid
+          in: query
+          required: true
+          description: 实例 UUID（**不是**昵称）
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 已受理（面板立即返回，实例状态随后变化，需重新查询状态）
+        "403":
+          description: API Key 权限不足 / 未开启 API Key 功能 / 不是这台实例的主人
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+            # 面板实际返回 `Content-Type: text/plain` + JSON 文本（协议中间件 JSON.stringify 后
+            # 没改 Content-Type），所以两种类型都要声明，否则客户端会判定"类型不匹配"而丢掉文案。
+            text/plain:
+              schema:
+                type: string
+        "500":
+          description: 面板内部错误 / 节点（守护进程）返回了错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+            text/plain:
+              schema:
+                type: string
+  /api/protected_instance/restart:
+    get:
+      operationId: restartInstance
+      summary: 重启实例
+      description: |
+        对应面板「重启」。
+
+        **普通用户也能调用**（`/protected_instance` 一组只要"这台实例属于你"，不要求管理员）。
+        面板对成功/失败都返回 200 + 空的 JSON 对象或节点回执，所以本 spec 不声明 200 的响应体：
+        我们只关心"请求有没有被拒绝"（403/500）。
+      parameters:
+        - name: daemonId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: uuid
+          in: query
+          required: true
+          description: 实例 UUID（**不是**昵称）
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 已受理（面板立即返回，实例状态随后变化，需重新查询状态）
+        "403":
+          description: API Key 权限不足 / 未开启 API Key 功能 / 不是这台实例的主人
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+            # 面板实际返回 `Content-Type: text/plain` + JSON 文本（协议中间件 JSON.stringify 后
+            # 没改 Content-Type），所以两种类型都要声明，否则客户端会判定"类型不匹配"而丢掉文案。
+            text/plain:
+              schema:
+                type: string
+        "500":
+          description: 面板内部错误 / 节点（守护进程）返回了错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+            text/plain:
+              schema:
+                type: string
+  /api/protected_instance/command:
+    get:
+      operationId: sendCommand
+      summary: 向实例的控制台发送一条命令
+      description: |
+        命令走**查询参数**（面板 `validator({ query: { …, command: String } })`），不是请求体。
+        命令里出现的 `&` / `=` / 空格由生成的客户端负责百分号编码。
+
+        以 `/` 开头的（如 `/say hi`、`/list`）是 Minecraft 命令；不带 `/` 的是控制台命令
+        （如 `stop`）。面板不做校验，原样转给节点。
+      parameters:
+        - name: daemonId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: uuid
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: command
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 已转交（命令是否执行要去看控制台输出）
+        "403":
+          description: API Key 权限不足 / 未开启 API Key 功能 / 不是这台实例的主人
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+            # 面板实际返回 `Content-Type: text/plain` + JSON 文本（协议中间件 JSON.stringify 后
+            # 没改 Content-Type），所以两种类型都要声明，否则客户端会判定"类型不匹配"而丢掉文案。
+            text/plain:
+              schema:
+                type: string
+        "500":
+          description: 面板内部错误 / 节点（守护进程）返回了错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+            text/plain:
+              schema:
+                type: string
+  /api/protected_instance/outputlog:
+    get:
+      operationId: getOutputLog
+      summary: 实例控制台的终端输出（最近 N 个字符）
+      description: |
+        面板返回实例的**原始终端文本**（`Content-Type: text/plain`），不是 JSON；内容是日志
+        **尾部**，不带时间戳补全，可能从半行开始 —— 渲染时要当作"最近的一段"而不是完整历史。
+
+        面板按 `size` 截取尾部（支持 `1024` 或 `4kb` 这样的写法）；不传就返回全部（可能很大）。
+      parameters:
+        - name: daemonId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: uuid
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: size
+          in: query
+          required: false
+          description: 只取末尾多少字节/字符，例如 `16384` 或 `16kb`。
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 控制台文本（尾部）
+          content:
+            text/plain:
+              schema:
+                type: string
+        "403":
+          description: API Key 权限不足 / 未开启 API Key 功能 / 不是这台实例的主人
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+            # 面板实际返回 `Content-Type: text/plain` + JSON 文本（协议中间件 JSON.stringify 后
+            # 没改 Content-Type），所以两种类型都要声明，否则客户端会判定"类型不匹配"而丢掉文案。
+            text/plain:
+              schema:
+                type: string
+        "500":
+          description: 面板内部错误 / 节点（守护进程）返回了错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
             text/plain:
               schema:
                 type: string

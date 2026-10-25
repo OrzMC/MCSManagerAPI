@@ -43,12 +43,22 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+            # 面板实际返回 `Content-Type: text/plain` + JSON 文本（协议中间件 JSON.stringify 后
+            # 没改 Content-Type），所以两种类型都要声明，否则客户端会判定"类型不匹配"而丢掉文案。
+            text/plain:
+              schema:
+                type: string
         "500":
           description: 面板内部错误
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+            # 面板实际返回 `Content-Type: text/plain` + JSON 文本（协议中间件 JSON.stringify 后
+            # 没改 Content-Type），所以两种类型都要声明，否则客户端会判定"类型不匹配"而丢掉文案。
+            text/plain:
+              schema:
+                type: string
 
   /api/service/remote_service_instances:
     get:
@@ -97,12 +107,22 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+            # 面板实际返回 `Content-Type: text/plain` + JSON 文本（协议中间件 JSON.stringify 后
+            # 没改 Content-Type），所以两种类型都要声明，否则客户端会判定"类型不匹配"而丢掉文案。
+            text/plain:
+              schema:
+                type: string
         "500":
           description: 面板内部错误
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+            # 面板实际返回 `Content-Type: text/plain` + JSON 文本（协议中间件 JSON.stringify 后
+            # 没改 Content-Type），所以两种类型都要声明，否则客户端会判定"类型不匹配"而丢掉文案。
+            text/plain:
+              schema:
+                type: string
 
   /api/instance:
     get:
@@ -136,12 +156,22 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+            # 面板实际返回 `Content-Type: text/plain` + JSON 文本（协议中间件 JSON.stringify 后
+            # 没改 Content-Type），所以两种类型都要声明，否则客户端会判定"类型不匹配"而丢掉文案。
+            text/plain:
+              schema:
+                type: string
         "500":
           description: 面板内部错误
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+            # 面板实际返回 `Content-Type: text/plain` + JSON 文本（协议中间件 JSON.stringify 后
+            # 没改 Content-Type），所以两种类型都要声明，否则客户端会判定"类型不匹配"而丢掉文案。
+            text/plain:
+              schema:
+                type: string
 
   /api/auth:
     get:
@@ -175,12 +205,22 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+            # 面板实际返回 `Content-Type: text/plain` + JSON 文本（协议中间件 JSON.stringify 后
+            # 没改 Content-Type），所以两种类型都要声明，否则客户端会判定"类型不匹配"而丢掉文案。
+            text/plain:
+              schema:
+                type: string
         "500":
           description: 面板内部错误
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+            # 面板实际返回 `Content-Type: text/plain` + JSON 文本（协议中间件 JSON.stringify 后
+            # 没改 Content-Type），所以两种类型都要声明，否则客户端会判定"类型不匹配"而丢掉文案。
+            text/plain:
+              schema:
+                type: string
 
 components:
   securitySchemes:

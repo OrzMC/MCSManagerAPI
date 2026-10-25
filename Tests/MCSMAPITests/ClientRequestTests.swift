@@ -123,6 +123,36 @@ final class ClientRequestTests {
         #expect(session.configuration.waitsForConnectivity == false)
     }
 
+    /// 面板的错误响应是 **`Content-Type: text/plain` + JSON 文本**（协议中间件没改 Content-Type）。
+    /// spec 里两种类型都声明了，客户端不能因此丢掉文案。
+    @Test
+    func forbiddenTextPlainBodyIsAvailable() async throws {
+        let transport = MockTransport { _, _, _, _ in
+            var response = HTTPResponse(status: .forbidden)
+            response.headerFields[.contentType] = "text/plain; charset=utf-8"
+            let body = #"{"status":403,"data":"密钥不正确","time":1}"#
+            return (response, HTTPBody(Data(body.utf8)))
+        }
+        let client = MCSMClient.make(
+            serverURL: URL(string: "https://panel.example.com")!,
+            apiKey: "dummy",
+            transport: transport
+        )
+
+        let output = try await client.getCurrentUser(query: .init(advanced: true))
+        guard case .forbidden(let response) = output else {
+            Issue.record("应该是 403：\(output)")
+            return
+        }
+        guard case .plainText(let body) = response.body else {
+            Issue.record("text/plain 应该映射成 .plainText：\(response.body)")
+            return
+        }
+        let data = try await Data(collecting: body, upTo: 4096)
+        let text = String(decoding: data, as: UTF8.self)
+        #expect(text.contains("密钥不正确"))
+    }
+
     /// 用户常把面板地址粘成带尾斜杠，生成的路径本身以 `/api` 开头，不能拼出 `//api`。
     @Test
     func trailingSlashIsNormalized() {

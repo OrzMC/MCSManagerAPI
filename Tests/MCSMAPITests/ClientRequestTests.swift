@@ -87,6 +87,16 @@ final class ClientRequestTests {
         #expect(request.method == .get)
     }
 
+    /// 默认用**短超时**的会话（面板挂掉时要尽快给结论，而不是停在「加载中…」）。
+    @Test
+    func defaultClientUsesShortTimeoutSession() {
+        #expect(MCSMClient.defaultTimeout == 20)
+        let session = MCSMClient.makeSession(timeout: 20)
+        #expect(session.configuration.timeoutIntervalForRequest == 20)
+        #expect(session.configuration.timeoutIntervalForResource == 60)
+        #expect(session.configuration.waitsForConnectivity == false)
+    }
+
     /// 用户常把面板地址粘成带尾斜杠，生成的路径本身以 `/api` 开头，不能拼出 `//api`。
     @Test
     func trailingSlashIsNormalized() {

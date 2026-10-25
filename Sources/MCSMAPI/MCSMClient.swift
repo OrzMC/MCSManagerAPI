@@ -11,6 +11,13 @@ import OpenAPIURLSession
 
 public enum MCSMClient {
 
+    /// 默认请求超时（秒）。
+    ///
+    /// 面板挂在 Cloudflare Tunnel 后面时，首次请求偶尔要十几秒才出结果（实测 17s）；
+    /// 而 `URLSession` 默认 60 秒 —— 卡住时用户会长时间停在「加载中…」，看不出是失败还是在等。
+    /// 20 秒足够覆盖慢启动，又能在"面板挂了"时较快给出结论。
+    public static let defaultTimeout: TimeInterval = 20
+
     /// 构造一个指向自己面板的客户端。
     ///
     /// - Parameters:
@@ -22,13 +29,24 @@ public enum MCSMClient {
     public static func make(
         serverURL: URL,
         apiKey: String,
-        transport: any ClientTransport = URLSessionTransport()
+        timeout: TimeInterval = defaultTimeout,
+        transport: (any ClientTransport)? = nil
     ) -> Client {
         Client(
             serverURL: normalized(serverURL),
-            transport: transport,
+            transport: transport ?? URLSessionTransport(configuration: .init(session: makeSession(timeout: timeout))),
             middlewares: [APIKeyMiddleware(apiKey: apiKey)]
         )
+    }
+
+    /// 只建一条"短超时"的会话：不要在全局 `URLSession.shared` 上改配置。
+    static func makeSession(timeout: TimeInterval) -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = timeout
+        configuration.timeoutIntervalForResource = timeout * 3
+        // 面板连不上时宁可快速失败，也不要等到网络恢复（列表会一直转圈）。
+        configuration.waitsForConnectivity = false
+        return URLSession(configuration: configuration)
     }
 
     /// 去掉尾部斜杠；顺带把不带 scheme 的输入补成 `https://`（用户常只填域名）。

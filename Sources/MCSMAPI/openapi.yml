@@ -356,16 +356,6 @@ components:
         permission:
           type: integer
           description: 0 guest / 1 user / 10 admin（`ROLE`）
-        isInit:
-          type: boolean
-        open2FA:
-          type: boolean
-        loginTime:
-          type: integer
-          format: int64
-        registerTime:
-          type: integer
-          format: int64
         instances:
           type: array
           items:
@@ -381,16 +371,6 @@ components:
           type: string
         permission:
           type: integer
-        isInit:
-          type: boolean
-        open2FA:
-          type: boolean
-        loginTime:
-          type: integer
-          format: int64
-        registerTime:
-          type: integer
-          format: int64
         instances:
           type: array
           items:

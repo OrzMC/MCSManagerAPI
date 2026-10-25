@@ -169,6 +169,8 @@ final class SpecDecodingTests {
               "data": {
                 "uuid": "u1",
                 "userName": "testuser",
+                "loginTime": "2026-10-24 16:26:49",
+                "registerTime": "2026-10-01 09:00:00",
                 "permission": 1,
                 "instances": [
                   { "instanceUuid": "i1", "daemonId": "d1", "nickname": "我的服", "status": 3 }

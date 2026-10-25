@@ -1,0 +1,466 @@
+openapi: 3.1.0
+info:
+  title: MCSManager Panel API
+  version: "10"
+  description: |
+    MCSManager 面板 HTTP API 的**最小可用子集**（OrzMC 的 P2-7 需要的那几个端点）。
+
+    权威来源是官方 apidoc（`MCSManager/Documentation` → `apis/api_instance.md`、`apis/api_daemon.md`），
+    官方**没有**提供机器可读的 OpenAPI/Swagger 文件，所以这里按官方文档手写：
+
+    - 文档版本：MCSManager/Documentation @ 287c3936（2026-10-25 取用）
+    - 面板实现参考：MCSManager/MCSManager @ ad4f903a（鉴权：`X-Request-API-Key` 头或 `?apikey=`）
+
+    设计口径（与 `swift/lib/ExarotonAPI` 一致）：
+    - **保守声明**：只有我们真的依赖的字段才写进 `required`，其余全部可选。
+      面板版本之间字段会增删，解码要宽容（未知字段会被 Swift 忽略）；
+    - 只覆盖已接入的端点，不做"把官方文档全抄一遍"。加端点时同步更新本文件与 README。
+
+    ⚠️ 该面板要求打开「API Key」功能（`enableApiKey`），否则所有带 key 的请求都会被拒。
+servers:
+  - url: https://panel.example.com
+    description: 由调用方替换成自己的面板地址（`Client(serverURL:)`）。
+security:
+  - apiKeyHeader: []
+paths:
+  /api/service/remote_services:
+    get:
+      operationId: getDaemons
+      summary: 节点（守护进程）列表
+      description: |
+        面板已知的所有 Daemon，每个带 `available`（是否连通）与显示名 `remarks`。
+        需要管理员权限。列表项里的 `instances` 概览结构官方未定稿，本 spec 不声明（忽略该字段）。
+      responses:
+        "200":
+          description: 节点列表
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DaemonListResponse"
+        "403":
+          description: API Key 权限不足 / 未开启 API Key 功能
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: 面板内部错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/service/remote_service_instances:
+    get:
+      operationId: getInstances
+      summary: 某个节点上的实例列表（含状态）
+      description: |
+        分页返回某个 Daemon 上的实例；每项含 `status`（-1 busy / 0 stopped / 1 stopping /
+        2 starting / 3 running）与 `config`。列表项**不含** `processInfo` / `space`。
+      parameters:
+        - name: daemonId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: page_size
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 50
+        - name: instance_name
+          in: query
+          required: false
+          description: 按实例显示名模糊过滤
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 实例分页
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstanceListResponse"
+        "403":
+          description: API Key 权限不足 / 未开启 API Key 功能
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: 面板内部错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/instance:
+    get:
+      operationId: getInstance
+      summary: 单个实例详情
+      description: |
+        含 `config`（含 Docker 内存上限 `config.docker.memory`）、`info`（玩家数、ping）、
+        `processInfo`（CPU / 内存 / 运行时长）与 `status`。
+      parameters:
+        - name: uuid
+          in: query
+          required: true
+          description: 实例 ID（`instanceUuid`）
+          schema:
+            type: string
+        - name: daemonId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 实例详情
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstanceDetailResponse"
+        "403":
+          description: API Key 权限不足 / 未开启 API Key 功能
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: 面板内部错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  securitySchemes:
+    apiKeyHeader:
+      type: apiKey
+      in: header
+      name: X-Request-API-Key
+      description: |
+        面板「用户信息 → API Key」里生成的 key（与账号密码同等权限，勿泄露）。
+        面板也接受 `?apikey=` 查询参数；本包用 header（不落 URL、不进日志）。
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: integer
+          description: HTTP 语义的状态码（403 / 500 …）
+        data:
+          type: string
+          description: 面板给出的错误文案（可能被 i18n 翻译）
+        time:
+          type: integer
+          format: int64
+
+    Daemon:
+      type: object
+      required:
+        - uuid
+      properties:
+        uuid:
+          type: string
+        ip:
+          type: string
+        port:
+          type: integer
+        prefix:
+          type: string
+          description: Daemon 的 API 路径前缀
+        available:
+          type: boolean
+          description: 节点是否连通
+        remarks:
+          type: string
+          description: 节点显示名
+
+    DaemonListResponse:
+      type: object
+      required:
+        - status
+        - data
+      properties:
+        status:
+          type: integer
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Daemon"
+        time:
+          type: integer
+          format: int64
+
+    InstanceListResponse:
+      type: object
+      required:
+        - status
+        - data
+      properties:
+        status:
+          type: integer
+        data:
+          $ref: "#/components/schemas/InstancePage"
+        time:
+          type: integer
+          format: int64
+
+    InstancePage:
+      type: object
+      required:
+        - data
+      properties:
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        maxPage:
+          type: integer
+        allTags:
+          type: array
+          items:
+            type: string
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/InstanceDetail"
+
+    InstanceDetailResponse:
+      type: object
+      required:
+        - status
+        - data
+      properties:
+        status:
+          type: integer
+        data:
+          $ref: "#/components/schemas/InstanceDetail"
+        time:
+          type: integer
+          format: int64
+
+    InstanceDetail:
+      type: object
+      required:
+        - instanceUuid
+        - status
+      properties:
+        instanceUuid:
+          type: string
+        status:
+          type: integer
+          description: "-1 busy / 0 stopped / 1 stopping / 2 starting / 3 running"
+        started:
+          type: integer
+          description: 启动次数
+        autoRestarted:
+          type: integer
+          description: 自动重启次数
+        space:
+          type: integer
+          format: int64
+          description: 占用磁盘空间（字节）；列表端点不返回
+        config:
+          $ref: "#/components/schemas/InstanceConfig"
+        info:
+          $ref: "#/components/schemas/InstanceInfo"
+        processInfo:
+          $ref: "#/components/schemas/ProcessInfo"
+
+    InstanceConfig:
+      type: object
+      description: |
+        实例配置。这里只声明 OrzMC 会用到的字段（昵称、内存上限、端口、ping 配置等），
+        其余字段由面板返回、被解码忽略。
+      properties:
+        nickname:
+          type: string
+        type:
+          type: string
+          description: 实例类型（universal / minecraft/java …）
+        startCommand:
+          type: string
+        stopCommand:
+          type: string
+        stopTimeout:
+          type: integer
+        cwd:
+          type: string
+        ie:
+          type: string
+          description: 输入编码
+        oe:
+          type: string
+          description: 输出编码
+        createDatetime:
+          type: integer
+          format: int64
+        lastDatetime:
+          type: integer
+          format: int64
+        endTime:
+          type: integer
+          format: int64
+        fileCode:
+          type: string
+        processType:
+          type: string
+          description: general / docker
+        category:
+          type: integer
+        basePort:
+          type: integer
+        runAs:
+          type: string
+        tag:
+          type: array
+          items:
+            type: string
+        enableRcon:
+          type: boolean
+        rconIp:
+          type: string
+        rconPort:
+          type: integer
+        rconPassword:
+          type: string
+        updateCommand:
+          type: string
+        java:
+          type: object
+          properties:
+            id:
+              type: string
+        terminalOption:
+          type: object
+          properties:
+            haveColor:
+              type: boolean
+            pty:
+              type: boolean
+            ptyWindowCol:
+              type: integer
+            ptyWindowRow:
+              type: integer
+        eventTask:
+          type: object
+          properties:
+            autoStart:
+              type: boolean
+            autoRestart:
+              type: boolean
+            autoRestartMaxTimes:
+              type: integer
+        pingConfig:
+          type: object
+          description: 面板侧的 ping 探测配置（用来显示在线人数）
+          properties:
+            ip:
+              type: string
+            port:
+              type: integer
+            type:
+              type: integer
+        docker:
+          $ref: "#/components/schemas/DockerConfig"
+
+    DockerConfig:
+      type: object
+      description: 只在 `processType == docker` 时有意义；这里只声明内存/镜像/端口。
+      properties:
+        image:
+          type: string
+        containerName:
+          type: string
+        memory:
+          type: integer
+          format: int64
+          description: 容器内存上限（MB）
+        cpuUsage:
+          type: integer
+          description: CPU 上限（百分比）
+        networkMode:
+          type: string
+        ports:
+          type: array
+          items:
+            type: string
+
+    InstanceInfo:
+      type: object
+      properties:
+        mcPingOnline:
+          type: boolean
+        currentPlayers:
+          type: integer
+        maxPlayers:
+          type: integer
+        version:
+          type: string
+        latency:
+          type: integer
+        fileLock:
+          type: integer
+        openFrpStatus:
+          type: boolean
+        playersChart:
+          type: array
+          items:
+            type: object
+            properties:
+              value:
+                type: string
+        allocatedPorts:
+          type: array
+          items:
+            type: object
+            properties:
+              host:
+                type: string
+              container:
+                type: integer
+              protocol:
+                type: string
+
+    ProcessInfo:
+      type: object
+      description: 进程资源占用（列表端点不返回）
+      properties:
+        cpu:
+          type: number
+          format: double
+          description: 百分比（0 ~ 100 × 核数）
+        memory:
+          type: integer
+          format: int64
+          description: 字节
+        ppid:
+          type: integer
+        pid:
+          type: integer
+        ctime:
+          type: integer
+          format: int64
+          description: 用户态 + 内核态时间（毫秒）
+        elapsed:
+          type: integer
+          format: int64
+          description: 运行时长（毫秒）
+        timestamp:
+          type: integer
+          format: int64

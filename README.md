@@ -39,11 +39,13 @@ try await client.sendCommand(
     query: .init(daemonId: daemonId, uuid: instanceUUID, command: "/say hi")
 )
 
-// 控制台输出：**纯文本**（日志尾部），不是 JSON
+// 控制台输出：`text/plain` 的日志尾部。注意面板把**所有**响应的包了一层
+// `{status, data, time}`（连纯文本接口也一样），所以要 unwrap 一次。
 let log = try await client.getOutputLog(
     query: .init(daemonId: daemonId, uuid: instanceUUID, size: "16kb")
 )
-let text = try await String(collecting: log.ok.body.plainText, upTo: 1 << 20)
+let raw = try await String(collecting: log.ok.body.plainText, upTo: 1 << 20)
+let text = try MCSMResponseEnvelope.checkedText(raw)   // 或 unwrapText(raw) 不抛错
 ```
 
 | 端点 | 权限 | 说明 |
@@ -52,7 +54,19 @@ let text = try await String(collecting: log.ok.body.plainText, upTo: 1 << 20)
 | `GET /api/protected_instance/stop` | 同上 | 停止（发送 `stop`，不强制杀进程） |
 | `GET /api/protected_instance/restart` | 同上 | 重启 |
 | `GET /api/protected_instance/command` | 同上 | 命令走查询参数；`/` 开头是 MC 命令，不带 `/` 是控制台命令 |
-| `GET /api/protected_instance/outputlog` | 同上 | 返回 `text/plain` 的**日志尾部**，可能从半行开始 |
+| `GET /api/protected_instance/outputlog` | 同上 | 返回 `text/plain` 的**日志尾部**，可能从半行开始。体里仍是 `{status,data,time}` 外壳 → 用 `MCSMResponseEnvelope` 解 |
+
+### 响应外壳（重要）
+
+面板的协议中间件（`protocol.ts`）对**每一个** `/api/*` 响应都做
+`JSON.stringify({status, data, time})`，而且**不改 `Content-Type`**（所以 JSON 体常带着
+`text/plain`，`outputlog` 的日志文本也被塞进外壳的 `data` 里）。
+
+| 情况 | 处理 |
+|---|---|
+| `application/json` 接口 | 按 schema 解 `{status, data}`（本 spec 的 `DaemonListResponse` / `InstancePage` / `CurrentUserResponse` 都已声明） |
+| `text/plain` 接口（`outputlog`） | 体是 JSON 文本 → `MCSMResponseEnvelope.unwrapText(_:)` / `checkedText(_:)` |
+| 错误响应 | 同理：`{"status":403,"data":"密钥不正确"}`，`text/plain` |
 
 ⚠️ `/protected_instance/*` 的中间件先校验"这台实例是不是你的"（`daemonId` + `uuid` 缺一个就 403
 「参数不正确或非法访问实例」），**再**看 API Key 的权限等级 —— 所以普通用户的 key 完全够用。

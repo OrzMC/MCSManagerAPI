@@ -195,4 +195,37 @@ final class SpecDecodingTests {
         #expect(response.status == 403)
         #expect(response.data == "Forbidden")
     }
+    // MARK: - 统一响应外壳（`{status, data, time}`）
+
+    /// 面板的协议中间件把**所有**响应都包了一层，纯文本接口（`outputlog`）也一样：
+    /// `text/plain` 体里装的是 `{"status":200,"data":"<日志>","time":…}`。
+    @Test
+    func unwrapsPanelTextEnvelope() {
+        let raw = #"{"status":200,"data":"[12:00:00] [Server thread/INFO]: Done","time":1718594177859}"#
+        #expect(MCSMResponseEnvelope.unwrapText(raw) == "[12:00:00] [Server thread/INFO]: Done")
+    }
+
+    /// 没有外壳（老版本/协议改了）就原样返回，不猜版本。
+    @Test
+    func passesThroughPlainTextWithoutEnvelope() {
+        let raw = "[12:00:00] [Server thread/INFO]: Done\n[12:00:01] [Server thread/INFO]: Bye"
+        #expect(MCSMResponseEnvelope.unwrapText(raw) == raw)
+    }
+
+    /// 外壳里 status 不是 2xx → 抛错，把面板那句原因带出来。
+    @Test
+    func throwsWhenEnvelopeStatusIsError() {
+        let raw = #"{"status":500,"data":"[Forbidden] 节点未连接","time":1}"#
+        #expect(throws: MCSMResponseError.self) {
+            _ = try MCSMResponseEnvelope.checkedText(raw)
+        }
+        do {
+            _ = try MCSMResponseEnvelope.checkedText(raw)
+        } catch let error as MCSMResponseError {
+            #expect(error.status == 500)
+            #expect(error.message == "[Forbidden] 节点未连接")
+        } catch {
+            Issue.record("期望 MCSMResponseError，实际 \(error)")
+        }
+    }
 }

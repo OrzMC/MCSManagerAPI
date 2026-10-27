@@ -24,26 +24,26 @@ struct StreamEndpointTests {
 
     @Test("proxy 模式：面板地址 + 空前缀 + https → wss")
     func proxyMode() {
-        #expect(url("mcs.example.com") == "wss://mcs.example.com/socket.io?EIO=4&transport=websocket")
+        #expect(url("mcs.example.com") == "wss://mcs.example.com/socket.io/?EIO=4&transport=websocket")
     }
 
     @Test("direct 模式：节点给了端口")
     func directWithPort() {
         #expect(
-            url("10.0.0.5:24444") == "wss://10.0.0.5:24444/socket.io?EIO=4&transport=websocket"
+            url("10.0.0.5:24444") == "wss://10.0.0.5:24444/socket.io/?EIO=4&transport=websocket"
         )
     }
 
     @Test("回环地址换成本面板的主机名（保留端口）")
     func loopbackBecomesPanelHost() {
         #expect(
-            url("127.0.0.1:24444") == "wss://mcs.example.com:24444/socket.io?EIO=4&transport=websocket"
+            url("127.0.0.1:24444") == "wss://mcs.example.com:24444/socket.io/?EIO=4&transport=websocket"
         )
         #expect(
-            url("localhost:24444") == "wss://mcs.example.com:24444/socket.io?EIO=4&transport=websocket"
+            url("localhost:24444") == "wss://mcs.example.com:24444/socket.io/?EIO=4&transport=websocket"
         )
         #expect(
-            url("127.0.0.1") == "wss://mcs.example.com/socket.io?EIO=4&transport=websocket"
+            url("127.0.0.1") == "wss://mcs.example.com/socket.io/?EIO=4&transport=websocket"
         )
     }
 
@@ -51,24 +51,24 @@ struct StreamEndpointTests {
     func prefixPath() {
         #expect(
             url("10.0.0.5:24444", prefix: "/daemon/")
-                == "wss://10.0.0.5:24444/daemon/socket.io?EIO=4&transport=websocket"
+                == "wss://10.0.0.5:24444/daemon/socket.io/?EIO=4&transport=websocket"
         )
         #expect(
             url("10.0.0.5:24444", prefix: "daemon")
-                == "wss://10.0.0.5:24444/daemon/socket.io?EIO=4&transport=websocket"
+                == "wss://10.0.0.5:24444/daemon/socket.io/?EIO=4&transport=websocket"
         )
     }
 
     @Test("地址自带协议时以它为准")
     func explicitScheme() {
         #expect(
-            url("ws://10.0.0.5:24444") == "ws://10.0.0.5:24444/socket.io?EIO=4&transport=websocket"
+            url("ws://10.0.0.5:24444") == "ws://10.0.0.5:24444/socket.io/?EIO=4&transport=websocket"
         )
         #expect(
-            url("http://10.0.0.5:24444") == "ws://10.0.0.5:24444/socket.io?EIO=4&transport=websocket"
+            url("http://10.0.0.5:24444") == "ws://10.0.0.5:24444/socket.io/?EIO=4&transport=websocket"
         )
         #expect(
-            url("https://10.0.0.5:24444") == "wss://10.0.0.5:24444/socket.io?EIO=4&transport=websocket"
+            url("https://10.0.0.5:24444") == "wss://10.0.0.5:24444/socket.io/?EIO=4&transport=websocket"
         )
     }
 
@@ -76,7 +76,7 @@ struct StreamEndpointTests {
     func insecurePanel() {
         #expect(
             url("mcs.example.com:81", panel: "http://mcs.example.com:81")
-                == "ws://mcs.example.com:81/socket.io?EIO=4&transport=websocket"
+                == "ws://mcs.example.com:81/socket.io/?EIO=4&transport=websocket"
         )
     }
 

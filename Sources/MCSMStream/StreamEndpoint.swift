@@ -97,7 +97,10 @@ extension MCSMStreamEndpoint {
         let prefix = rawPrefix.trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         var socketPath = prefix.isEmpty ? "/socket.io" : "/\(prefix)/socket.io"
-        if socketPath.hasSuffix("/") { socketPath.removeLast() }
+        // ⚠️ 必须以 `/` 结尾：socket.io 客户端请求的是 `/socket.io/?EIO=4…`。
+        // 少了这个斜杠，节点（真机实测：`mcs-node.*:443` 反向代理）直接 404/握手失败 ——
+        // 我之前就是这么踩的：`-1011 Websocket handshake failure`，而 `/socket.io/` 一切正常。
+        if !socketPath.hasSuffix("/") { socketPath += "/" }
 
         var components = URLComponents()
         components.scheme = scheme

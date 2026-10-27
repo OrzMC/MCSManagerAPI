@@ -14,6 +14,7 @@ let package = Package(
     ],
     products: [
         .library(name: "MCSMAPI", targets: ["MCSMAPI"]),
+        .library(name: "MCSMStream", targets: ["MCSMStream"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-openapi-generator.git", from: "1.11.0"),
@@ -32,6 +33,18 @@ let package = Package(
             ],
             plugins: [
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator"),
+            ]
+        ),
+        .target(
+            name: "MCSMStream",
+            dependencies: ["MCSMAPI"]
+        ),
+        .testTarget(
+            name: "MCSMStreamTests",
+            dependencies: [
+                "MCSMStream",
+                "MCSMAPI",
+                .product(name: "Testing", package: "swift-testing"),
             ]
         ),
         .testTarget(

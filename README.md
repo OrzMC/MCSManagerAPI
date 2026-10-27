@@ -55,6 +55,38 @@ let text = try MCSMResponseEnvelope.checkedText(raw)   // 或 unwrapText(raw) �
 | `GET /api/protected_instance/restart` | 同上 | 重启 |
 | `GET /api/protected_instance/command` | 同上 | 命令走查询参数；`/` 开头是 MC 命令，不带 `/` 是控制台命令 |
 | `GET /api/protected_instance/outputlog` | 同上 | 返回 `text/plain` 的**日志尾部**，可能从半行开始。体里仍是 `{status,data,time}` 外壳 → 用 `MCSMResponseEnvelope` 解 |
+| `POST /api/protected_instance/stream_channel` | 同上 | 控制台**实时流**的第一步：拿 `addr` + 一次性口令，然后连那台 socket.io 发 `stream/auth`。见下节 |
+
+### 实时流（`MCSMStream`，另一个 product）
+
+轮询 `outputlog` 的实时性差；面板支持把节点 stdout 一条条推过来（面板自己的前端就是这么做的）：
+
+```swift
+import MCSMStream
+
+let channel = try await MCSMStreamChannel(client.getStreamChannel(query: .init(daemonId: d, uuid: u)))!
+let endpoint = try MCSMStreamEndpoint(channel: channel, panelURL: panelURL)
+
+let stream = MCSMStreamClient { endpoint }
+for await event in await stream.events() {
+    switch event {
+    case .ready:                 break          // stream/auth 通过，可以收输出了
+    case .output(let text):      buffer.append(text)
+    case .fallback(let reason):  await poll()   // 实时流不可用 → 回退轮询
+    case .connecting, .lifecycle: break
+    }
+}
+```
+
+要点（都是踩过的）：
+
+- **一次性口令**：每次重连都要重新申请通道 → 客户端收的是 `makeEndpoint` 闭包，不是固定 URL；
+- **`addr` 可能是节点视角**（`127.0.0.1:24444`，面板 `dataPlane=direct` 时就是节点的公开地址）：
+  回环地址会被换成本面板的主机名；连不上（节点在 NAT 后面）就回退轮询，这是正常路径；
+- **`/socket.io/` 的尾部斜杠不能少**：少了会 404 / 握手失败（实测 `-1011 Websocket handshake failure`）；
+- **必须回 pong**：Engine.IO v4 由服务端 ping，不回会被 20~25 秒后踢掉；
+- 事件参数形如 `{ "data": … }`，`instance/stdout` 的 `data.text` 是**原始终端文本**（带 ANSI 码、
+  可能半行、可能 `\r` 覆盖）→ 交给 `ConsoleTextParser` 那一套渲染，别自己按行切。
 
 ### 响应外壳（重要）
 
@@ -128,6 +160,21 @@ let text = try MCSMResponseEnvelope.checkedText(raw)   // 或 unwrapText(raw) �
 ```
 
 它会拉官方 markdown，逐个检查 spec 里声明的路径还在不在（CI 里也有一个**不阻塞**的 job 跑它）。
+
+## 真实面板冒烟（可选）
+
+`stream_channel` 的形状与 socket.io 可达性只有真面板能验证，所以有一个默认跳过的测试：
+
+```bash
+ORZMC_MCSM_LIVE_URL=https://mcs.example.com \
+ORZMC_MCSM_LIVE_KEY=<API Key> \
+ORZMC_MCSM_LIVE_DAEMON=<daemonId> \
+ORZMC_MCSM_LIVE_INSTANCE=<instanceUuid> \
+swift test --filter LiveStreamTests
+```
+
+它会：申请通道 → 连 socket.io → 期望 `stream/auth` 回 `true` → 发一条 `/list` → 期望收到实时输出。
+口令与实例**不要**写进仓库。
 
 ## 测试
 

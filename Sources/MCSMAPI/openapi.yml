@@ -461,6 +461,68 @@ paths:
               schema:
                 type: string
 
+  /api/protected_instance/stream_channel:
+    post:
+      operationId: getStreamChannel
+      summary: 申请控制台实时流通道（节点地址 + 一次性口令）
+      description: |
+        面板「实时终端」的第一步：拿到**往哪儿连**和**一次性口令**，然后连那个地址上的
+        socket.io，发 `stream/auth` 换到真正的输出流。比轮询 `outputlog` 实时得多
+        （面板内部就是把节点的 stdout 一条条推过来）。
+
+        返回体的形状取决于面板的 `dataPlane` 配置（面板 10.18+）：
+
+        - `direct`（默认）：`addr` 是**节点（守护进程）的地址**，客户端直连节点；
+          节点在 NAT 后面时这个地址从公网不可达 —— 连不上就回退轮询。
+        - `proxy`：`addr` 是**面板自己的对外地址**，`prefix` 为空，`password` 是面板签发的
+          网关令牌，由面板把 socket.io 中转给节点。公网部署通常用这个模式。
+
+        两种模式下**客户端代码一样**：连 `addr` + `prefix`，发 `stream/auth`。
+
+        **普通用户也能调用**（同 `/protected_instance` 一组，只要实例属于你）。
+        口令是一次性的、有有效期；断开重连要重新申请（本包不缓存）。
+      parameters:
+        - name: daemonId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: uuid
+          in: query
+          required: true
+          description: 实例 UUID（**不是**昵称）
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 通道信息（带 `{status,data,time}` 外壳）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StreamChannelResponse"
+            # 同其他接口：面板协议中间件会把体包成 JSON 但 Content-Type 有时还是 text/plain。
+            text/plain:
+              schema:
+                type: string
+        "403":
+          description: API Key 权限不足 / 未开启 API Key 功能 / 不是这台实例的主人
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+            text/plain:
+              schema:
+                type: string
+        "500":
+          description: 面板内部错误 / 节点未连接
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+            text/plain:
+              schema:
+                type: string
+
 components:
   securitySchemes:
     apiKeyHeader:
@@ -472,6 +534,72 @@ components:
         面板也接受 `?apikey=` 查询参数；本包用 header（不落 URL、不进日志）。
 
   schemas:
+    StreamChannelResponse:
+      type: object
+      description: |
+        `POST /api/protected_instance/stream_channel` 的响应。
+
+        两种形状都要能解：带外壳 `{status, data: {…}, time}`（面板 10.x 实际行为），
+        以及不套外壳时直接把 `addr` / `password` 放在顶层。
+      properties:
+        status:
+          type: integer
+        time:
+          type: integer
+          format: int64
+        data:
+          $ref: "#/components/schemas/StreamChannelPayload"
+        addr:
+          type: string
+        password:
+          type: string
+        prefix:
+          type: string
+        remoteMappings:
+          type: array
+          items:
+            $ref: "#/components/schemas/RemoteMappingEntry"
+
+    StreamChannelPayload:
+      type: object
+      description: 通道本体：连哪、用什么口令。
+      required:
+        - addr
+        - password
+      properties:
+        addr:
+          type: string
+          description: |
+            `host[:port]` 或 `ws(s)://host[:port][/path]`。
+            `127.0.0.1` / `localhost` 开头的地址要换成本面板的主机名（节点和面板常在同一台机器）。
+        password:
+          type: string
+          description: 一次性口令（direct 模式是节点签发的，proxy 模式是面板签发的网关令牌）。
+        prefix:
+          type: string
+          description: socket.io 的路径前缀（proxy 模式为空；direct 模式跟随节点配置，如 `/daemon`）。
+        remoteMappings:
+          type: array
+          items:
+            $ref: "#/components/schemas/RemoteMappingEntry"
+
+    RemoteMappingEntry:
+      type: object
+      description: 面板的地址重映射（节点地址 → 浏览器可访问地址）。用不上时直接忽略。
+      properties:
+        from:
+          $ref: "#/components/schemas/RemoteMappingEndpoint"
+        to:
+          $ref: "#/components/schemas/RemoteMappingEndpoint"
+
+    RemoteMappingEndpoint:
+      type: object
+      properties:
+        addr:
+          type: string
+        prefix:
+          type: string
+
     ErrorResponse:
       type: object
       required:

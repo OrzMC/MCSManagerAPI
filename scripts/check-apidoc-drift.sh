@@ -18,11 +18,24 @@ for f in api_instance.md api_daemon.md; do
   curl -fsSL "${BASE}/${f}" >>"${docs}"
 done
 
+# 官方文档里**确实没有**、但我们已确认在用的端点（面板内部路由）。
+# 加进这里必须写清楚证据，别拿它掩盖真正的 drift。
+undocumented_ok() {
+  case "$1" in
+    # 面板 `/api/auth` 是前端登录态的聚合接口，官方 apidoc 只写了 admin 那套。
+    # 我们用它列"普通用户自己的实例"，实测 10.18.0 可正常返回（见 README「权限」节）。
+    "/api/auth") return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 status=0
 # 从 spec 里取出所有路径（/api/...），逐个在官方文档里找。
 while IFS= read -r path; do
   if grep -Fq "${path}" "${docs}"; then
     echo "[ok] ${path}"
+  elif undocumented_ok "${path}"; then
+    echo "[skip] ${path}（官方文档未收录，已确认在用）"
   else
     echo "[drift] 官方 apidoc 里找不到 ${path}（端点可能改名/下架，需同步 spec）" >&2
     status=1

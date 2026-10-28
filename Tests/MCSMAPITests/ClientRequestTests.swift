@@ -49,6 +49,7 @@ final class ClientRequestTests {
             ("openInstance", "/api/protected_instance/open"),
             ("stopInstance", "/api/protected_instance/stop"),
             ("restartInstance", "/api/protected_instance/restart"),
+            ("killInstance", "/api/protected_instance/kill"),
         ] {
             let capture = RequestCapture()
             let client = makeClient(capture: capture)
@@ -57,6 +58,8 @@ final class ClientRequestTests {
                 _ = try await client.openInstance(query: .init(daemonId: "d1", uuid: "i1"))
             case "stopInstance":
                 _ = try await client.stopInstance(query: .init(daemonId: "d1", uuid: "i1"))
+            case "killInstance":
+                _ = try await client.killInstance(query: .init(daemonId: "d1", uuid: "i1"))
             default:
                 _ = try await client.restartInstance(query: .init(daemonId: "d1", uuid: "i1"))
             }

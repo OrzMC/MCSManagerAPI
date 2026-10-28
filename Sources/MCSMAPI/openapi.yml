@@ -273,7 +273,10 @@ paths:
       operationId: stopInstance
       summary: 停止实例
       description: |
-        对应面板「停止」（会给实例发 `stop`，等它自己退出）。要强制杀进程用 `kill`（本包未封装）。
+        对应面板「停止」（会给实例发 `stop`，等它自己退出）。要强制杀进程用 `kill`。
+
+        ⚠️ **停止是异步的**：面板立即返回 200，实例随后进入 `STOPPING`；服务器卡住/存档很慢时
+        可能长时间停在 `STOPPING`，此时用 `kill` 强杀。
 
         **普通用户也能调用**（`/protected_instance` 一组只要"这台实例属于你"，不要求管理员）。
         面板对成功/失败都返回 200 + 空的 JSON 对象或节点回执，所以本 spec 不声明 200 的响应体：
@@ -301,6 +304,57 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
             # 面板实际返回 `Content-Type: text/plain` + JSON 文本（协议中间件 JSON.stringify 后
             # 没改 Content-Type），所以两种类型都要声明，否则客户端会判定"类型不匹配"而丢掉文案。
+            text/plain:
+              schema:
+                type: string
+        "500":
+          description: 面板内部错误 / 节点（守护进程）返回了错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+            text/plain:
+              schema:
+                type: string
+  /api/protected_instance/kill:
+    get:
+      operationId: killInstance
+      summary: 强制终止实例（强杀进程）
+      description: |
+        对应面板的「强制终止」：守护进程直接 `kill` 掉服务器进程，**不给服务器保存/退出的机会**
+        （没存盘的进度会丢）。用于"停止卡住"的场合。
+
+        面板源码：`panel/src/app/routers/instance_operate_router.ts` 的 `/kill`（`router.all`，
+        前端用 `GET`）→ 守护进程 `instance/kill` → `instance.execPreset("kill")`；
+        面板侧超时 `INSTANCE_KILL_TIMEOUT = 30000`（30 秒，注意比普通动作长）。
+
+        官方 apidoc 已收录（`api_instance.md` 的 `GET /api/protected_instance/kill`）。
+        权限与其它 `protected_instance` 端点一致：**普通用户也能调**（只要求这台实例属于你）。
+      parameters:
+        - name: daemonId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: uuid
+          in: query
+          required: true
+          description: 实例 UUID（**不是**昵称）
+          schema:
+            type: string
+      responses:
+        "200":
+          # 只声明"受理了"，不声明 200 的响应体：面板回的是 `{status,data,time}` 外壳，
+          # 里面的 `data` 结构各版本不一致（实测 10.18.0 是 `{instanceUuid}`），
+          # 声明成具体 schema 反而会因为多/少字段解码失败（踩过：typeMismatch String/dictionary）。
+          # 我们只关心"请求有没有被拒绝"（403/500），与 `stop` / `restart` 一致。
+          description: 已受理（面板立即返回；实例状态随后变化，需重新查询）
+        "403":
+          description: API Key 权限不足 / 未开启 API Key 功能 / 不是这台实例的主人
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
             text/plain:
               schema:
                 type: string

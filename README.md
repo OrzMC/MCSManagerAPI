@@ -53,6 +53,7 @@ let text = try MCSMResponseEnvelope.checkedText(raw)   // 或 unwrapText(raw) �
 | `GET /api/protected_instance/open` | 实例的主人（**普通用户也行**） | 启动。面板立即返回，状态随后变化 |
 | `GET /api/protected_instance/stop` | 同上 | 停止（发送 `stop`，不强制杀进程） |
 | `GET /api/protected_instance/restart` | 同上 | 重启 |
+| `GET /api/protected_instance/kill` | 同上 | **强制终止**（守护进程直接杀进程，不给保存机会）。面板侧超时 30 秒 |
 | `GET /api/protected_instance/command` | 同上 | 命令走查询参数；`/` 开头是 MC 命令，不带 `/` 是控制台命令 |
 | `GET /api/protected_instance/outputlog` | 同上 | 返回 `text/plain` 的**日志尾部**，可能从半行开始。体里仍是 `{status,data,time}` 外壳 → 用 `MCSMResponseEnvelope` 解 |
 | `POST /api/protected_instance/stream_channel` | 同上 | 控制台**实时流**的第一步：拿 `addr` + 一次性口令，然后连那台 socket.io 发 `stream/auth`。见下节 |
